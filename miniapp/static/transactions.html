@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transactions · AI Finance</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=8">
+  <style>
+    /* ── Enhanced stat cards ────────────────────────── */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 720px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
+    .stat-item {
+      background: rgba(255,255,255,.045);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px 12px;
+      text-align: center;
+      transition: border-color .2s, transform .15s;
+    }
+    .stat-item:hover { border-color: rgba(57,185,146,.3); transform: translateY(-2px); }
+    .stat-icon { font-size: 24px; margin-bottom: 6px; }
+    .stat-item .s-val { font-size: 17px; font-weight: 800; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stat-item .s-lbl { font-size: 10px; color: var(--muted); margin-top: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+    .stat-item.accent  { border-color: rgba(57,185,146,.35);  background: rgba(57,185,146,.07); }
+    .stat-item.accent .s-val  { color: var(--brand); }
+    .stat-item.danger  { border-color: rgba(255,77,94,.35);   background: rgba(255,77,94,.07); }
+    .stat-item.danger .s-val  { color: var(--danger); }
+    .stat-item.warning { border-color: rgba(245,166,35,.35);  background: rgba(245,166,35,.07); }
+    .stat-item.warning .s-val { color: var(--warning); }
+
+    /* ── Transaction items ──────────────────────────── */
+    .tx-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 14px; border: 1px solid var(--line);
+      border-radius: 12px; background: rgba(255,255,255,.03);
+      transition: border-color .15s, background .15s;
+    }
+    .tx-item:hover { border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.05); }
+    .tx-dot { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .tx-info { flex: 1; min-width: 0; }
+    .tx-name { font-weight: 700; font-size: 14px; text-transform: capitalize; }
+    .tx-time { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .tx-amount { font-weight: 800; font-size: 15px; color: var(--danger); white-space: nowrap; }
+    .tx-list   { display: grid; gap: 8px; }
+
+    /* ── Search ─────────────────────────────────────── */
+    .search-wrap { position: relative; margin-bottom: 10px; }
+    .search-wrap input { padding-left: 40px; border-radius: 99px; padding-top: 10px; padding-bottom: 10px; }
+    .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 15px; pointer-events: none; opacity: .45; line-height: 1; }
+  </style>
+</head>
+<body>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+
+  <main class="shell">
+    <header class="header glass">
+      <div class="header-meta">
+        <p class="kicker">Ledger / History</p>
+        <h1>Transactions</h1>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="copyBtn">📋 Copy Summary</button>
+        <button class="btn btn-danger btn-sm" id="undoBtn">Undo Last</button>
+      </div>
+    </header>
+
+    <nav class="topnav glass">
+      <a data-page="dashboard"    href="/">Dashboard</a>
+      <a data-page="money"        href="/static/money.html">Budget</a>
+      <a data-page="goals"        href="/static/goals.html">Goals</a>
+      <a data-page="advice"       href="/static/advice.html">AI Advice</a>
+      <a data-page="transactions" href="/static/transactions.html">Transactions</a>
+    </nav>
+
+    <!-- Undo confirmation -->
+    <div class="risk-banner" id="undoConfirm" hidden>
+      Remove the last transaction?
+      <span style="margin-left:12px;display:inline-flex;gap:8px">
+        <button class="btn btn-sm btn-danger" id="undoYes">Confirm</button>
+        <button class="btn btn-sm btn-ghost"  id="undoNo">Cancel</button>
+      </span>
+    </div>
+
+    <!-- KPI stat cards -->
+    <div class="stat-row" id="statsRow"></div>
+
+    <!-- AI Expense Analyzer -->
+    <article class="panel glass" style="margin-bottom:14px" id="analyzerPanel">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+        <div>
+          <h2 style="margin:0 0 4px">AI Expense Analyzer</h2>
+          <p style="margin:0;font-size:12px;color:var(--muted)">Smart analysis · Trends · Anomaly detection</p>
+        </div>
+        <button class="btn btn-sm" id="analyzeBtn" style="flex-shrink:0">
+          <span class="spinner" id="analyzeSpinner" hidden></span>Analyze
+        </button>
+      </div>
+      <div id="analyzeResults" hidden>
+        <div id="analyzeSummary" style="font-size:13px;line-height:1.65;padding:12px 14px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px;margin-bottom:12px;color:var(--text)"></div>
+        <div id="analyzeAlerts" style="display:grid;gap:8px;margin-bottom:12px"></div>
+        <div id="analyzeTrends" style="display:grid;gap:6px;margin-bottom:12px"></div>
+        <div id="analyzeInsight" style="font-size:13px;line-height:1.6;padding:12px 14px;background:rgba(57,185,146,.07);border:1px solid rgba(57,185,146,.2);border-radius:12px;color:#d6f7ed"></div>
+      </div>
+      <p class="empty" id="analyzePlaceholder" style="margin:0;padding:12px 0">Click Analyze to detect spending trends, anomalies, and month-over-month changes.</p>
+    </article>
+
+    <!-- Search + filter + transaction list -->
+    <article class="panel glass">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h2 style="margin:0" id="listTitle">All Transactions</h2>
+        <span id="catTotal" style="font-size:13px;font-weight:800;color:var(--brand)"></span>
+      </div>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input id="searchInput" type="text" placeholder="Search by category…">
+      </div>
+      <div class="filter-bar" id="filterBar"></div>
+      <div class="tx-list" id="txList"><p class="empty">Loading…</p></div>
+    </article>
+  </main>
+
+  <script src="/static/common.js?v=9"></script>
+  <script>
+    setActiveNav('transactions');
+
+    const CAT_COLORS = ['#39b992','#5d6eff','#f5a623','#ff4d5e','#34d7bf','#a78bfa','#fb923c','#4ade80','#60a5fa','#f472b6'];
+    const CAT_ICONS  = { food:'🍔', restaurant:'🍽', coffee:'☕', car:'🚗', rent:'🏠', utilities:'💡', health:'💊', shopping:'🛍', entertainment:'🎮', transport:'🚌', education:'📚', gym:'🏋' };
+    function catIcon(name) { for (const [k,v] of Object.entries(CAT_ICONS)) if (name.includes(k)) return v; return '💳'; }
+
+    let allItems     = [];
+    let activeFilter = 'all';
+    let searchQuery  = '';
+
+    /* ── Stats ─────────────────────────────────────────────────────────────── */
+    function renderStats(items) {
+      if (!items.length) { $('statsRow').innerHTML = ''; return; }
+      const total  = items.reduce((s, x) => s + x.amount, 0);
+      const days   = new Set(items.map(x => (x.created_at || '').slice(0, 10))).size || 1;
+      const avgDay = total / days;
+      const topCat = Object.entries(
+        items.reduce((m, x) => { m[x.category] = (m[x.category]||0) + x.amount; return m; }, {})
+      ).sort((a,b) => b[1]-a[1])[0];
+
+      $('statsRow').innerHTML = `
+        <div class="stat-item danger">
+          <div class="stat-icon">💸</div>
+          <div class="s-val">${money(total)} so'm</div>
+          <div class="s-lbl">Total Spent</div>
+        </div>
+        <div class="stat-item accent">
+          <div class="stat-icon">🔢</div>
+          <div class="s-val">${items.length}</div>
+          <div class="s-lbl">Transactions</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-icon">📅</div>
+          <div class="s-val">${money(avgDay)} so'm</div>
+          <div class="s-lbl">Avg per Day</div>
+        </div>
+        ${topCat ? `<div class="stat-item warning">
+          <div class="stat-icon">🏆</div>
+          <div class="s-val">${topCat[0]}</div>
+          <div class="s-lbl">Top Category</div>
+        </div>` : ''}
+      `;
+    }
+
+    /* ── Filter chips ──────────────────────────────────────────────────────── */
+    function renderFilters() {
+      const cats = ['all', ...new Set(allItems.map(x => x.category))];
+      $('filterBar').innerHTML = cats.map(c =>
+        `<button class="chip${c === activeFilter ? ' active' : ''}" data-cat="${c}">${c === 'all' ? 'All' : c}</button>`
+      ).join('');
+      $('filterBar').querySelectorAll('.chip').forEach(btn => {
+        btn.onclick = () => { activeFilter = btn.dataset.cat; renderFilters(); renderList(); };
+      });
+    }
+
+    /* ── Transaction list ──────────────────────────────────────────────────── */
+    function renderList() {
+      let items = activeFilter === 'all' ? allItems : allItems.filter(x => x.category === activeFilter);
+      if (searchQuery) items = items.filter(x => x.category.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const label = searchQuery ? 'Search Results' : activeFilter === 'all' ? 'All Transactions' : activeFilter;
+      $('listTitle').textContent = label;
+
+      if (activeFilter !== 'all' || searchQuery) {
+        const tot = items.reduce((s, x) => s + x.amount, 0);
+        $('catTotal').textContent = items.length ? `${money(tot)} so'm total` : '';
+      } else { $('catTotal').textContent = ''; }
+
+      if (!items.length) { $('txList').innerHTML = '<p class="empty">No transactions found.</p>'; return; }
+
+      $('txList').innerHTML = items.map((x, i) => {
+        const color = CAT_COLORS[allItems.findIndex(a => a.category === x.category) % CAT_COLORS.length] || CAT_COLORS[i % CAT_COLORS.length];
+        return `<div class="tx-item">
+          <div class="tx-dot" style="background:${color}22;color:${color}">${catIcon(x.category)}</div>
+          <div class="tx-info">
+            <div class="tx-name">${x.category}</div>
+            <div class="tx-time">${timeAgo(x.created_at)}</div>
+          </div>
+          <div class="tx-amount">−${money(x.amount)} so'm</div>
+        </div>`;
+      }).join('');
+    }
+
+    /* ── Load ──────────────────────────────────────────────────────────────── */
+    async function loadTx() {
+      const d = await api('/api/transactions?limit=100');
+      allItems = d.items;
+      renderStats(allItems);
+      renderFilters();
+      renderList();
+    }
+
+    /* ── Search ────────────────────────────────────────────────────────────── */
+    $('searchInput').oninput = () => {
+      searchQuery = $('searchInput').value.trim();
+      renderList();
+    };
+
+    /* ── Copy Summary ──────────────────────────────────────────────────────── */
+    $('copyBtn').onclick = () => {
+      if (!allItems.length) { toast('No transactions to summarize', 'info'); return; }
+      const total  = allItems.reduce((s, x) => s + x.amount, 0);
+      const catMap = allItems.reduce((m, x) => { m[x.category] = (m[x.category]||0) + x.amount; return m; }, {});
+      const lines  = [
+        `AI Finance Summary — ${new Date().toLocaleDateString()}`,
+        `Total: ${money(total)} so'm | ${allItems.length} transactions`,
+        '',
+        'By Category:',
+        ...Object.entries(catMap).sort((a,b) => b[1]-a[1]).map(([c,v]) => `  ${c}: ${money(v)} so'm`),
+      ];
+      navigator.clipboard?.writeText(lines.join('\n'))
+        .then(() => toast('Summary copied to clipboard!', 'success'))
+        .catch(() => toast('Clipboard not supported in this browser', 'info'));
+    };
+
+    /* ── Undo ──────────────────────────────────────────────────────────────── */
+    $('undoBtn').onclick = () => { $('undoConfirm').hidden = false; $('undoBtn').disabled = true; };
+    $('undoNo').onclick  = () => { $('undoConfirm').hidden = true;  $('undoBtn').disabled = false; };
+    $('undoYes').onclick = async () => {
+      $('undoConfirm').hidden = true; $('undoBtn').disabled = false;
+      try {
+        await api('/api/transactions/last', { method: 'DELETE' });
+        activeFilter = 'all'; searchQuery = ''; $('searchInput').value = '';
+        await loadTx();
+        toast('Last transaction removed', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    };
+
+    /* ── AI Expense Analyzer ───────────────────────────────────────────────── */
+    $('analyzeBtn').onclick = async () => {
+      const btn = $('analyzeBtn');
+      btnLoad(btn, true);
+      $('analyzePlaceholder').hidden = true;
+      $('analyzeResults').hidden = true;
+
+      try {
+        const d = await api('/api/analyze', { method: 'POST' });
+
+        // If response has no valid content, show nothing
+        const hasContent = d.summary || (d.alerts && d.alerts.length) || (d.trends && d.trends.length) || d.insight;
+        if (!hasContent) {
+          $('analyzePlaceholder').textContent = 'Not enough data to analyze yet. Add more expenses and try again.';
+          $('analyzePlaceholder').hidden = false;
+          return;
+        }
+
+        // Summary
+        $('analyzeSummary').textContent = d.summary || '';
+        $('analyzeSummary').hidden = !d.summary;
+
+        // Alerts
+        const alertColors = { warning: ['rgba(245,166,35,.1)','rgba(245,166,35,.3)','#f5a623'], danger: ['rgba(255,77,94,.1)','rgba(255,77,94,.3)','#ff4d5e'], success: ['rgba(57,185,146,.1)','rgba(57,185,146,.3)','#39b992'] };
+        $('analyzeAlerts').innerHTML = (d.alerts || []).map(a => {
+          const [bg, border, color] = alertColors[a.type] || alertColors.warning;
+          const icons = { warning: '⚠️', danger: '🔴', success: '✅' };
+          return `<div style="padding:12px 14px;border-radius:12px;background:${bg};border:1px solid ${border}">
+            <div style="font-size:13px;font-weight:800;margin-bottom:4px;color:${color}">${icons[a.type]||'📌'} ${a.title}</div>
+            <div style="font-size:12px;color:var(--muted);line-height:1.55">${a.body}</div>
+          </div>`;
+        }).join('');
+
+        // Trends
+        $('analyzeTrends').innerHTML = (d.trends || []).map(t => {
+          const up    = t.direction === 'up';
+          const isNew = t.direction === 'new';
+          const arrow = isNew ? '🆕' : up ? '↑' : '↓';
+          const color = up ? 'var(--danger)' : isNew ? 'var(--muted)' : 'var(--success)';
+          return `<div style="display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)">
+            <span style="font-size:16px">${arrow}</span>
+            <span style="font-size:13px;flex:1;line-height:1.5">${t.text}</span>
+            ${t.change_pct != null ? `<span style="font-size:12px;font-weight:800;color:${color}">${t.change_pct > 0 ? '+' : ''}${Math.round(t.change_pct)}%</span>` : ''}
+          </div>`;
+        }).join('');
+
+        // Insight
+        $('analyzeInsight').textContent = d.insight ? `💡 ${d.insight}` : '';
+        $('analyzeInsight').hidden = !d.insight;
+
+        $('analyzeResults').hidden = false;
+        toast('Analysis complete', 'success');
+      } catch (err) {
+        $('analyzePlaceholder').textContent = err.message;
+        $('analyzePlaceholder').hidden = false;
+        toast(err.message, 'error');
+      } finally {
+        btnLoad(btn, false);
+      }
+    };
+
+    ensureAuth().then(loadTx).catch(e => toast(e.message, 'error'));
+  </script>
+</body>
+</html>

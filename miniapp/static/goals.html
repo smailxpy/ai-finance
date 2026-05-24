@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Goals · AI Finance</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=8">
+  <style>
+    /* KPI cards */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+    @media (max-width: 800px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    .kpi-card { border-radius: 16px; padding: 18px 12px; text-align: center; background: rgba(255,255,255,.045); border: 1px solid var(--line); transition: border-color .2s, transform .15s; }
+    .kpi-card:hover { border-color: rgba(57,185,146,.3); transform: translateY(-2px); }
+    .kpi-icon { font-size: 26px; margin-bottom: 8px; }
+    .kpi-val  { font-size: 18px; font-weight: 800; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .kpi-lbl  { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-top: 5px; }
+    .kpi-card.kpi-ok   { border-color: rgba(57,185,146,.35); background: rgba(57,185,146,.07); }
+    .kpi-card.kpi-ok   .kpi-val { color: var(--brand); }
+    .kpi-card.kpi-warn { border-color: rgba(245,166,35,.35); background: rgba(245,166,35,.07); }
+    .kpi-card.kpi-warn .kpi-val { color: var(--warning); }
+    .kpi-card.kpi-bad  { border-color: rgba(255,77,94,.35);  background: rgba(255,77,94,.07); }
+    .kpi-card.kpi-bad  .kpi-val { color: var(--danger); }
+    .kpi-card.kpi-blue { border-color: rgba(93,110,255,.35); background: rgba(93,110,255,.07); }
+    .kpi-card.kpi-blue .kpi-val { color: #818cf8; }
+
+    /* Gauge */
+    .gauge-panel { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .gauge-canvas-wrap { position: relative; width: 200px; height: 108px; }
+    .gauge-canvas-wrap canvas { width: 200px !important; height: 108px !important; }
+    .gauge-text { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); text-align: center; }
+    .gauge-text .g-pct { font-size: 32px; font-weight: 800; line-height: 1; }
+    .gauge-text .g-sub { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+    .gauge-label { font-size: 16px; font-weight: 800; text-align: center; }
+    .gauge-desc  { font-size: 12px; color: var(--muted); text-align: center; max-width: 200px; }
+
+    /* Savings snapshot */
+    .snap-wrap { display: flex; align-items: center; gap: 16px; padding: 14px 0 0; border-top: 1px solid var(--line); margin-top: 12px; }
+    .snap-canvas-box { flex-shrink: 0; width: 80px; height: 80px; position: relative; }
+    .snap-canvas-box canvas { width: 80px !important; height: 80px !important; }
+    .snap-legend { flex: 1; display: grid; gap: 7px; }
+    .snap-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .snap-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .snap-lbl { color: var(--muted); flex: 1; }
+    .snap-val { font-weight: 800; }
+
+    /* Goal cards list */
+    .goals-list { display: grid; gap: 10px; }
+    .goal-card-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 14px 16px; border-radius: 14px;
+      border: 1px solid var(--line); background: rgba(255,255,255,.04);
+      transition: border-color .2s;
+    }
+    .goal-card-item:hover { border-color: rgba(57,185,146,.25); }
+    .goal-cat-badge {
+      width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .goal-body { flex: 1; min-width: 0; }
+    .goal-title { font-weight: 800; font-size: 14px; margin: 0 0 2px; }
+    .goal-meta  { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+    .goal-prog-bar { height: 6px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; margin-bottom: 4px; }
+    .goal-prog-fill { height: 100%; border-radius: 99px; transition: width .6s ease; }
+    .goal-prog-info { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+    .goal-prog-info strong { color: var(--text); }
+    .goal-delete {
+      width: 28px; height: 28px; border-radius: 8px; border: 1px solid rgba(255,77,94,.3);
+      background: rgba(255,77,94,.08); color: var(--danger); font-size: 13px; font-weight: 800;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: background .15s; margin-top: 2px;
+    }
+    .goal-delete:hover { background: rgba(255,77,94,.2); }
+
+    /* Add goal form */
+    .goal-cat-picker { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+    @media (max-width: 560px) { .goal-cat-picker { grid-template-columns: repeat(3, 1fr); } }
+    .goal-cat-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 10px 6px; border-radius: 12px; border: 1px solid var(--line);
+      background: transparent; cursor: pointer; transition: all .15s; font: inherit;
+    }
+    .goal-cat-btn .gcb-icon { font-size: 22px; }
+    .goal-cat-btn .gcb-lbl  { font-size: 10px; color: var(--muted); font-weight: 700; }
+    .goal-cat-btn:hover, .goal-cat-btn.selected {
+      border-color: var(--brand); background: rgba(57,185,146,.08);
+    }
+    .goal-cat-btn.selected .gcb-lbl { color: var(--brand); }
+  </style>
+</head>
+<body>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+
+  <main class="shell">
+    <header class="header glass">
+      <div class="header-meta">
+        <p class="kicker">Planning</p>
+        <h1>Goals &amp; Health</h1>
+      </div>
+    </header>
+
+    <nav class="topnav glass">
+      <a data-page="dashboard"    href="/">Dashboard</a>
+      <a data-page="money"        href="/static/money.html">Budget</a>
+      <a data-page="goals"        href="/static/goals.html">Goals</a>
+      <a data-page="advice"       href="/static/advice.html">AI Advice</a>
+      <a data-page="transactions" href="/static/transactions.html">Transactions</a>
+    </nav>
+
+    <!-- KPI cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-blue"><div class="kpi-icon">💼</div><div class="kpi-val" id="sIncome">—</div><div class="kpi-lbl">Monthly Income</div></div>
+      <div class="kpi-card" id="kpiSpent">      <div class="kpi-icon">💸</div><div class="kpi-val" id="sSpent">—</div><div class="kpi-lbl">Month Spent</div></div>
+      <div class="kpi-card kpi-ok" id="kpiSaved"><div class="kpi-icon">🏦</div><div class="kpi-val" id="sSaved">—</div><div class="kpi-lbl">Est. Savings</div></div>
+      <div class="kpi-card" id="kpiRate">        <div class="kpi-icon">📈</div><div class="kpi-val" id="sRate">—</div><div class="kpi-lbl">Savings Rate</div></div>
+    </div>
+
+    <div class="grid-2" style="align-items:start">
+
+      <!-- Left: gauge + snapshot + income chart -->
+      <div>
+        <article class="panel glass" style="margin-bottom:12px">
+          <h2>Financial Health</h2>
+          <div class="gauge-panel">
+            <div class="gauge-canvas-wrap">
+              <canvas id="gaugeCanvas"></canvas>
+              <div class="gauge-text">
+                <div class="g-pct" id="gaugePct">—</div>
+                <div class="g-sub">Savings Rate</div>
+              </div>
+            </div>
+            <div class="gauge-label" id="gaugeLabel">—</div>
+            <div class="gauge-desc"  id="gaugeDesc">—</div>
+          </div>
+          <div class="snap-wrap" id="snapWrap" hidden>
+            <div class="snap-canvas-box"><canvas id="snapCanvas"></canvas></div>
+            <div class="snap-legend" id="snapLegend"></div>
+          </div>
+        </article>
+
+        <article class="panel glass">
+          <h2>Income vs Spending</h2>
+          <div id="incomeVsEmpty" class="empty" hidden>Set income to see comparison.</div>
+          <div class="chart-box" id="ivChartBox" style="max-height:180px">
+            <canvas id="ivCanvas"></canvas>
+          </div>
+        </article>
+      </div>
+
+      <!-- Right: goals list + add goal form -->
+      <div>
+        <!-- Goals list -->
+        <article class="panel glass" style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <h2 style="margin:0">My Goals</h2>
+            <span id="goalsCount" style="font-size:12px;color:var(--muted)"></span>
+          </div>
+          <div class="goals-list" id="goalsList">
+            <p class="empty" id="noGoals">No goals yet. Add your first goal below.</p>
+          </div>
+        </article>
+
+        <!-- Add goal form -->
+        <article class="panel glass" style="background:linear-gradient(135deg,rgba(57,185,146,.06),rgba(93,110,255,.06))">
+          <h2>Add New Goal</h2>
+          <form id="goalForm" class="stack">
+            <div>
+              <label>Category</label>
+              <div class="goal-cat-picker" id="goalCatPicker"></div>
+              <input type="hidden" id="goalCategoryInput" value="vehicle">
+            </div>
+            <div>
+              <label for="goalTitle">Goal title</label>
+              <input id="goalTitle" placeholder="e.g. New car, Vacation, Emergency fund…" required>
+            </div>
+            <div>
+              <label for="goalTarget">Target amount (so'm)</label>
+              <input id="goalTarget" type="number" min="1" step="1" placeholder="e.g. 50 000 000" required>
+            </div>
+            <div>
+              <label for="goalDeadline">Deadline (optional)</label>
+              <input id="goalDeadline" type="date">
+            </div>
+            <button class="btn" type="submit" id="goalBtn">Add Goal</button>
+          </form>
+        </article>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="/static/common.js?v=8"></script>
+  <script>
+    setActiveNav('goals');
+
+    try {
+      Chart.defaults.color       = '#8aa5bf';
+      Chart.defaults.borderColor = 'rgba(255,255,255,0.07)';
+      Chart.defaults.font.family = 'Manrope, system-ui, sans-serif';
+    } catch(_) {}
+
+    let _gaugeChart = null;
+    let _ivChart    = null;
+    let _snapChart  = null;
+    let _monthlySave = 0;
+
+    const GOAL_CATS = [
+      { key: 'vehicle',   icon: '🚗', label: 'Car' },
+      { key: 'property',  icon: '🏠', label: 'Property' },
+      { key: 'vacation',  icon: '✈️', label: 'Vacation' },
+      { key: 'education', icon: '🎓', label: 'Education' },
+      { key: 'emergency', icon: '🛡️', label: 'Emergency' },
+      { key: 'gadget',    icon: '📱', label: 'Gadget' },
+      { key: 'business',  icon: '💼', label: 'Business' },
+      { key: 'other',     icon: '🎯', label: 'Other' },
+    ];
+
+    const GOAL_CAT_COLORS = {
+      vehicle: '#5d6eff', property: '#39b992', vacation: '#f5a623', education: '#34d7bf',
+      emergency: '#ff4d5e', gadget: '#a78bfa', business: '#fb923c', other: '#60a5fa',
+    };
+
+    function renderGoalCatPicker(selected) {
+      $('goalCatPicker').innerHTML = GOAL_CATS.map(c =>
+        `<button type="button" class="goal-cat-btn${c.key === selected ? ' selected' : ''}" data-key="${c.key}">
+          <span class="gcb-icon">${c.icon}</span>
+          <span class="gcb-lbl">${c.label}</span>
+        </button>`
+      ).join('');
+      $('goalCatPicker').querySelectorAll('.goal-cat-btn').forEach(btn => {
+        btn.onclick = () => {
+          $('goalCategoryInput').value = btn.dataset.key;
+          renderGoalCatPicker(btn.dataset.key);
+        };
+      });
+    }
+
+    async function loadPage() {
+      const [snap, profile, goalsData] = await Promise.all([
+        api('/api/dashboard'), api('/api/profile'), api('/api/goals'),
+      ]);
+
+      const income    = snap.monthly_income;
+      const unplanned = snap.month_unplanned_income || 0;
+      const total     = (income || 0) + unplanned;
+      const projected = snap.projected_eom_spent;
+
+      // "Est. Savings" KPI uses ACTUAL spent — so spending 250K shows −250K, not a scaled projection
+      const savings     = income !== null ? total - snap.month_spent : null;
+      // Savings rate uses end-of-month projection for a forward-looking gauge
+      const projSavings = income !== null ? total - projected : null;
+      const rate        = income && total > 0 ? Math.max(0, Math.min(100, (projSavings ?? 0) / total * 100)) : null;
+      _monthlySave = Math.max(0, savings || 0);
+
+      // KPI cards
+      $('sIncome').textContent = income ? `${money(income)} so'm` : 'Not set';
+      $('sSpent').textContent  = `${money(snap.month_spent)} so'm`;
+
+      const kpiSaved = $('kpiSaved');
+      if (savings !== null) {
+        if (savings >= 0) { $('sSaved').textContent = `${money(savings)} so'm`; kpiSaved.className = 'kpi-card kpi-ok'; }
+        else { $('sSaved').textContent = `−${money(Math.abs(savings))} so'm`; kpiSaved.className = 'kpi-card kpi-bad'; }
+      }
+      if (rate !== null) {
+        $('sRate').textContent = `${rate.toFixed(1)}%`;
+        $('kpiRate').className = rate >= 25 ? 'kpi-card kpi-ok' : rate >= 10 ? 'kpi-card kpi-warn' : 'kpi-card kpi-bad';
+      }
+      if (income) {
+        $('kpiSpent').className = snap.month_spent > income * 0.9 ? 'kpi-card kpi-bad'
+          : snap.month_spent > income * 0.7 ? 'kpi-card kpi-warn' : 'kpi-card';
+      }
+
+      // Gauge
+      const scoreVal   = rate !== null ? Math.round(Math.max(0, rate)) : 0;
+      const gaugeColor = scoreVal >= 30 ? '#39b992' : scoreVal >= 10 ? '#f5a623' : '#ff4d5e';
+      if (_gaugeChart) _gaugeChart.destroy();
+      _gaugeChart = new Chart($('gaugeCanvas'), {
+        type: 'doughnut',
+        data: { datasets: [{ data: [Math.min(scoreVal, 100), Math.max(0, 100 - scoreVal)], backgroundColor: [gaugeColor, 'rgba(255,255,255,0.05)'], borderWidth: 0 }] },
+        options: { rotation: -90, circumference: 180, cutout: '72%', animation: { duration: 700 }, plugins: { legend: { display: false }, tooltip: { enabled: false } } },
+      });
+      $('gaugePct').textContent   = rate !== null ? `${scoreVal}%` : '—';
+      $('gaugePct').style.color   = gaugeColor;
+      $('gaugeLabel').textContent = income === null ? 'No Income Set' : scoreVal >= 30 ? 'Excellent — Keep it up!' : scoreVal >= 10 ? 'Good — Room to improve' : 'Low — Reduce spending';
+      $('gaugeLabel').style.color = gaugeColor;
+      $('gaugeDesc').textContent  = income === null ? 'Set monthly income in Budget.' : `Saving ${rate !== null ? rate.toFixed(1) : 0}% of income. ${scoreVal >= 25 ? 'Great discipline.' : 'Aim for 20%+ savings.'}`;
+
+      // Savings snapshot — spent vs what's left (actual, not projected)
+      if (income && snap.month_spent >= 0) {
+        $('snapWrap').hidden = false;
+        const spentAmt = snap.month_spent;
+        const savedAmt = Math.max(0, savings || 0);
+        if (_snapChart) _snapChart.destroy();
+        _snapChart = new Chart($('snapCanvas'), {
+          type: 'doughnut',
+          data: { datasets: [{ data: spentAmt + savedAmt > 0 ? [spentAmt, savedAmt] : [1, 0], backgroundColor: ['rgba(255,77,94,0.8)', 'rgba(57,185,146,0.8)'], borderWidth: 0 }] },
+          options: { cutout: '68%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { duration: 600 } },
+        });
+        $('snapLegend').innerHTML = `
+          <div class="snap-row"><div class="snap-dot" style="background:#ff4d5e"></div><span class="snap-lbl">Spent</span><span class="snap-val" style="color:var(--danger)">${money(spentAmt)} so'm</span></div>
+          <div class="snap-row"><div class="snap-dot" style="background:#39b992"></div><span class="snap-lbl">Saved</span><span class="snap-val" style="color:var(--brand)">${money(savedAmt)} so'm</span></div>
+          <div class="snap-row" style="border-top:1px solid rgba(255,255,255,.08);padding-top:6px;margin-top:2px">
+            <div class="snap-dot" style="background:#818cf8"></div><span class="snap-lbl">Income</span><span class="snap-val" style="color:#818cf8">${money(total)} so'm</span>
+          </div>`;
+      } else { $('snapWrap').hidden = true; }
+
+      // Income vs spending chart — horizontal comparison
+      if (!income) {
+        $('ivChartBox').hidden = true; $('incomeVsEmpty').hidden = false;
+      } else {
+        $('ivChartBox').hidden = false; $('incomeVsEmpty').hidden = true;
+        if (_ivChart) _ivChart.destroy();
+        const savAmt = Math.max(0, savings || 0);
+        const ivFmt  = v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? Math.round(v/1e3)+'K' : money(v);
+        _ivChart = new Chart($('ivCanvas'), {
+          type: 'bar',
+          data: {
+            labels: ['Income', 'Spent', 'Projected', 'Saved'],
+            datasets: [{
+              data: [total, snap.month_spent, projected, savAmt],
+              backgroundColor: [
+                'rgba(93,110,255,0.82)',
+                snap.month_spent > total ? 'rgba(255,77,94,0.88)' : 'rgba(255,77,94,0.68)',
+                'rgba(245,166,35,0.72)',
+                savAmt > 0 ? 'rgba(57,185,146,0.88)' : 'rgba(255,255,255,0.1)',
+              ],
+              borderRadius: 12,
+              borderWidth: 0,
+              borderSkipped: false,
+              barPercentage: 0.62,
+            }],
+          },
+          options: {
+            animation: { duration: 700, easing: 'easeOutQuart' },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(8,19,31,0.95)',
+                borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, padding: 12,
+                callbacks: {
+                  label: ctx => ` ${ivFmt(ctx.parsed.y)} so'm`,
+                }
+              },
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                border: { display: false },
+                ticks: { font: { weight: '700', size: 12 }, color: '#8aa5bf' },
+              },
+              y: {
+                grid: { color: 'rgba(255,255,255,0.04)' },
+                border: { display: false },
+                ticks: {
+                  callback: v => ivFmt(v),
+                  font: { size: 11 },
+                  maxTicksLimit: 5,
+                },
+              },
+            },
+          },
+        });
+      }
+
+      // Goals list
+      renderGoals(goalsData.items, _monthlySave);
+    }
+
+    function renderGoals(items, monthlySave) {
+      const list = $('goalsList');
+      $('goalsCount').textContent = items.length ? `${items.length} goal${items.length !== 1 ? 's' : ''}` : '';
+
+      if (!items.length) {
+        list.innerHTML = '<p class="empty" id="noGoals">No goals yet. Add your first goal below.</p>';
+        return;
+      }
+
+      list.innerHTML = items.map(g => {
+        const cat      = GOAL_CATS.find(c => c.key === g.category) || GOAL_CATS[GOAL_CATS.length - 1];
+        const color    = GOAL_CAT_COLORS[g.category] || '#60a5fa';
+        const saved    = g.saved_amount || 0;
+        const target   = g.target_amount;
+        const pct      = target > 0 ? Math.min(100, saved / target * 100) : 0;
+        const deadline = g.deadline ? new Date(g.deadline).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
+        const remaining = Math.max(0, target - saved);
+
+        const progColor = pct >= 100 ? '#39b992' : pct >= 50 ? '#34d7bf' : pct >= 20 ? '#f5a623' : '#5d6eff';
+
+        // Timeline hint: only if savings rate is known and goal not yet funded
+        let hint = '';
+        if (pct >= 100) {
+          hint = '🎉 Goal reached!';
+        } else if (monthlySave > 0 && remaining > 0) {
+          const months = Math.ceil(remaining / monthlySave);
+          hint = `~${months} month${months !== 1 ? 's' : ''} at current savings rate`;
+        }
+
+        return `<div class="goal-card-item" id="goal-${g.id}">
+          <div class="goal-cat-badge" style="background:${color}22;color:${color}">${cat.icon}</div>
+          <div class="goal-body">
+            <div class="goal-title">${g.title}</div>
+            <div class="goal-meta">${cat.label}${deadline ? ' · Due ' + deadline : ''}</div>
+            <div class="goal-prog-bar"><div class="goal-prog-fill" style="width:${pct.toFixed(1)}%;background:${progColor}"></div></div>
+            <div class="goal-prog-info">
+              <span style="color:${progColor};font-weight:800">${money(saved)} so'm saved</span>
+              <span><strong>${money(target)} so'm</strong></span>
+            </div>
+            ${hint ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">${hint}</div>` : ''}
+            <!-- Inline add-money form -->
+            <div class="goal-add-row" id="addRow-${g.id}" style="display:none;margin-top:10px;gap:6px;align-items:center">
+              <input type="number" min="1" step="1" placeholder="Amount to add (so'm)"
+                id="addAmt-${g.id}"
+                style="flex:1;border-radius:99px;padding:7px 14px;font-size:12px;border:1px solid rgba(57,185,146,.4);background:rgba(0,0,0,.25);color:var(--text);outline:none">
+              <button onclick="submitContrib(${g.id})"
+                style="padding:7px 14px;border-radius:99px;background:linear-gradient(135deg,#39b992,#34d7bf);border:none;color:#041116;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0">Save</button>
+              <button onclick="toggleAddRow(${g.id})"
+                style="padding:7px 10px;border-radius:99px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--muted);font-size:12px;cursor:pointer;flex-shrink:0">✕</button>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;margin-top:2px">
+            <button class="goal-delete" onclick="deleteGoal(${g.id})" title="Delete">✕</button>
+            <button onclick="toggleAddRow(${g.id})" title="Add money"
+              style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(57,185,146,.3);background:rgba(57,185,146,.08);color:var(--brand);font-size:15px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center">+</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Wire up display:flex for add rows
+      items.forEach(g => {
+        const row = document.getElementById(`addRow-${g.id}`);
+        if (row) row.style.display = 'none';
+      });
+    }
+
+    function toggleAddRow(id) {
+      const row = document.getElementById(`addRow-${id}`);
+      if (!row) return;
+      const visible = row.style.display !== 'none';
+      row.style.display = visible ? 'none' : 'flex';
+      if (!visible) document.getElementById(`addAmt-${id}`)?.focus();
+    }
+
+    async function submitContrib(id) {
+      const input = document.getElementById(`addAmt-${id}`);
+      const amount = parseFloat(input?.value);
+      if (!amount || amount <= 0) { toast('Enter a valid amount', 'error'); return; }
+      try {
+        await api(`/api/goals/${id}/contribute`, { method: 'POST', body: JSON.stringify({ amount }) });
+        toast('Money added to goal ✓', 'success');
+        await loadPage();
+      } catch (err) { toast(err.message, 'error'); }
+    }
+
+    async function deleteGoal(id) {
+      try {
+        await api(`/api/goals/${id}`, { method: 'DELETE' });
+        toast('Goal removed', 'success');
+        await loadPage();
+      } catch (err) { toast(err.message, 'error'); }
+    }
+
+    $('goalForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = $('goalBtn');
+      btnLoad(btn, true);
+      try {
+        await api('/api/goals', { method: 'POST', body: JSON.stringify({
+          title:         $('goalTitle').value.trim(),
+          category:      $('goalCategoryInput').value,
+          target_amount: Number($('goalTarget').value),
+          deadline:      $('goalDeadline').value || null,
+        })});
+        e.target.reset();
+        renderGoalCatPicker('vehicle');
+        $('goalCategoryInput').value = 'vehicle';
+        toast('Goal added ✓', 'success');
+        await loadPage();
+      } catch (err) { toast(err.message, 'error'); }
+      finally { btnLoad(btn, false); }
+    };
+
+    renderGoalCatPicker('vehicle');
+    ensureAuth().then(loadPage).catch(e => toast(e.message, 'error'));
+  </script>
+</body>
+</html>

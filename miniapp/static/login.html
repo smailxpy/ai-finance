@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign In · AI Finance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=8">
+</head>
+<body>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+
+  <div class="auth-wrap">
+    <div class="auth-card glass">
+      <div class="auth-brand">
+        <div class="auth-logo">💰</div>
+        <h1>AI Finance</h1>
+        <p>Your personal finance assistant</p>
+      </div>
+
+      <div class="auth-error" id="authError" hidden></div>
+
+      <form id="loginForm" class="stack">
+        <div>
+          <label for="username">Username</label>
+          <input id="username" autocomplete="username" placeholder="your_username" required>
+        </div>
+        <div>
+          <label for="password">Password</label>
+          <input id="password" type="password" autocomplete="current-password" placeholder="••••••" required>
+        </div>
+        <button class="btn" type="submit" id="loginBtn">Sign In</button>
+      </form>
+
+      <p class="auth-switch">No account? <a href="/register">Create one</a></p>
+    </div>
+  </div>
+
+  <script src="/static/common.js?v=8"></script>
+  <script>
+    if (_token) window.location.replace('/');
+
+    const errEl = document.getElementById('authError');
+
+    document.getElementById('loginForm').onsubmit = async (e) => {
+      e.preventDefault();
+      errEl.hidden = true;
+      const btn = document.getElementById('loginBtn');
+      btnLoad(btn, true);
+      try {
+        const data = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value,
+          }),
+        }).then(async (r) => {
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(d.detail || 'Login failed');
+          return d;
+        });
+        localStorage.setItem('fin_token', data.token);
+        localStorage.setItem('fin_user', JSON.stringify(data.user));
+        window.location.replace('/');
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.hidden = false;
+      } finally {
+        btnLoad(btn, false);
+      }
+    };
+  </script>
+</body>
+</html>

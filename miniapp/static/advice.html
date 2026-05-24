@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Advisor · AI Finance</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=8">
+  <style>
+    /* ── Score hero ─────────────────────────────────── */
+    .score-hero {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 20px; align-items: center;
+      padding: 22px 24px; margin-bottom: 14px;
+      background: linear-gradient(135deg, rgba(57,185,146,.1), rgba(93,110,255,.08));
+      border: 1px solid rgba(57,185,146,.25);
+      border-radius: var(--radius);
+    }
+    .score-ring { position: relative; width: 90px; height: 90px; flex-shrink: 0; }
+    .score-ring canvas { width: 90px !important; height: 90px !important; }
+    .score-ring-center {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .score-num { font-size: 24px; font-weight: 800; line-height: 1; }
+    .score-grade {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 8px; font-size: 14px; font-weight: 800;
+      margin-top: 4px;
+    }
+    .grade-A { background: rgba(57,185,146,.2); color: var(--brand); border: 1px solid rgba(57,185,146,.4); }
+    .grade-B { background: rgba(52,215,191,.15); color: #34d7bf; border: 1px solid rgba(52,215,191,.35); }
+    .grade-C { background: rgba(245,166,35,.15); color: var(--warning); border: 1px solid rgba(245,166,35,.35); }
+    .grade-D, .grade-F { background: rgba(255,77,94,.15); color: var(--danger); border: 1px solid rgba(255,77,94,.35); }
+    .score-meta h2 { margin: 0 0 6px; font-size: 18px; }
+    .score-meta p  { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .score-meta .headline { font-size: 14px; color: var(--text); font-weight: 600; margin-bottom: 6px; }
+
+    /* ── Generate strip ─────────────────────────────── */
+    .gen-strip {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+      padding: 14px 18px; margin-bottom: 14px;
+      background: rgba(255,255,255,.03);
+      border: 1px dashed rgba(57,185,146,.3); border-radius: 14px;
+      cursor: pointer; transition: background .2s;
+    }
+    .gen-strip:hover { background: rgba(57,185,146,.05); }
+    .gen-strip-left { display: flex; align-items: center; gap: 14px; }
+    .gen-icon { font-size: 28px; }
+    .gen-strip h3 { margin: 0 0 3px; font-size: 14px; font-weight: 800; text-transform: none; letter-spacing: 0; color: var(--text); }
+    .gen-strip p  { margin: 0; font-size: 12px; color: var(--muted); }
+
+    /* ── AI sections ────────────────────────────────── */
+    .ai-sections { display: grid; gap: 10px; margin-bottom: 14px; }
+    .ai-section {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 16px; border-radius: 14px;
+      background: rgba(255,255,255,.04); border: 1px solid var(--line);
+      transition: border-color .15s;
+    }
+    .ai-section:hover { border-color: rgba(255,255,255,.18); }
+    .ai-section-icon {
+      font-size: 22px; flex-shrink: 0; margin-top: 1px;
+      width: 40px; height: 40px; border-radius: 10px;
+      background: rgba(255,255,255,.06); display: flex; align-items: center; justify-content: center;
+    }
+    .ai-section-content h4 { margin: 0 0 5px; font-size: 13px; font-weight: 800; }
+    .ai-section-content p  { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+    /* ── Next steps ─────────────────────────────────── */
+    .next-steps { display: grid; gap: 8px; }
+    .next-step {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 12px 14px; border-radius: 12px;
+      background: rgba(57,185,146,.06); border: 1px solid rgba(57,185,146,.18);
+    }
+    .ns-num {
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      color: #041116; font-size: 11px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center; margin-top: 1px;
+    }
+    .ns-text { font-size: 13px; line-height: 1.55; }
+
+    /* ── Budget chart ───────────────────────────────── */
+    .health-row {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px;
+    }
+    @media (max-width: 560px) { .health-row { grid-template-columns: 1fr 1fr; } }
+    .hc {
+      border-radius: 14px; padding: 16px 14px; text-align: center;
+      border: 1px solid var(--line); background: rgba(255,255,255,.04);
+      transition: border-color .2s;
+    }
+    .hc:hover { border-color: rgba(255,255,255,.2); }
+    .hc-icon { font-size: 20px; margin-bottom: 6px; display: block; }
+    .hc-val  { font-size: 20px; font-weight: 800; line-height: 1.1; }
+    .hc-lbl  { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-top: 4px; }
+    .hc.ok      { border-color: rgba(57,185,146,.3);  background: rgba(57,185,146,.07); }
+    .hc.ok .hc-val      { color: var(--success); }
+    .hc.warning { border-color: rgba(245,166,35,.3);  background: rgba(245,166,35,.07); }
+    .hc.warning .hc-val { color: var(--warning); }
+    .hc.danger  { border-color: rgba(255,77,94,.3);   background: rgba(255,77,94,.07); }
+    .hc.danger .hc-val  { color: var(--danger); }
+
+    /* ── Loading placeholder ─────────────────────────── */
+    .ai-placeholder {
+      min-height: 120px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px;
+      color: var(--muted); font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+
+  <main class="shell">
+    <header class="header glass">
+      <div class="header-meta">
+        <p class="kicker">Intelligence</p>
+        <h1>AI Advisor</h1>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="refreshBtn">↻ Refresh</button>
+    </header>
+
+    <nav class="topnav glass">
+      <a data-page="dashboard"    href="/">Dashboard</a>
+      <a data-page="money"        href="/static/money.html">Budget</a>
+      <a data-page="goals"        href="/static/goals.html">Goals</a>
+      <a data-page="advice"       href="/static/advice.html">AI Advice</a>
+      <a data-page="transactions" href="/static/transactions.html">Transactions</a>
+    </nav>
+
+    <!-- Health metric cards -->
+    <div class="health-row" id="healthRow">
+      <div class="hc"><span class="hc-icon">📊</span><div class="hc-val" id="hcSpend">—</div><div class="hc-lbl">Spend Rate</div></div>
+      <div class="hc"><span class="hc-icon">💰</span><div class="hc-val" id="hcSave">—</div><div class="hc-lbl">Savings Rate</div></div>
+      <div class="hc"><span class="hc-icon">🎯</span><div class="hc-val" id="hcBudget">—</div><div class="hc-lbl">Budget Health</div></div>
+    </div>
+
+    <!-- Generate AI advice strip -->
+    <div class="gen-strip" id="genStrip">
+      <div class="gen-strip-left">
+        <span class="gen-icon">✦</span>
+        <div>
+          <h3>Generate AI Financial Report</h3>
+          <p>Deep analysis of your spending, savings rate, and personalized recommendations</p>
+        </div>
+      </div>
+      <button class="btn btn-sm" id="adviceBtn">
+        <span class="spinner" id="adviceSpinner" hidden></span>
+        Analyze Now
+      </button>
+    </div>
+
+    <!-- AI Score hero (hidden until generated) -->
+    <div class="score-hero" id="scoreHero" hidden>
+      <div class="score-ring">
+        <canvas id="scoreCanvas"></canvas>
+        <div class="score-ring-center">
+          <div class="score-num" id="scoreNum">—</div>
+          <div class="score-grade" id="scoreGrade">—</div>
+        </div>
+      </div>
+      <div class="score-meta">
+        <div class="headline" id="scoreHeadline">Analyzing…</div>
+        <p id="scoreDetail"></p>
+      </div>
+    </div>
+
+    <!-- AI sections -->
+    <div class="ai-sections" id="aiSections"></div>
+
+    <!-- Two-column: next steps + action plan -->
+    <div class="grid-2">
+      <article class="panel glass" id="nextStepsPanel" hidden>
+        <h2>Next Steps</h2>
+        <div class="next-steps" id="nextStepsList"></div>
+      </article>
+
+      <article class="panel glass">
+        <h2>7-Day Action Plan</h2>
+        <div id="planList"><p class="empty">Loading plan…</p></div>
+      </article>
+    </div>
+
+  </main>
+
+  <script src="/static/common.js?v=8"></script>
+  <script>
+    setActiveNav('advice');
+
+    try {
+      Chart.defaults.color       = '#8aa5bf';
+      Chart.defaults.borderColor = 'rgba(255,255,255,0.07)';
+      Chart.defaults.font.family = 'Manrope, system-ui, sans-serif';
+    } catch(_) {}
+
+    let _scoreChart = null;
+
+    /* ── Health cards ─────────────────────────────────────────────────────────── */
+    function setHealthCard(elId, cardSelector, val, goodAbove, warnAbove) {
+      const el   = document.getElementById(elId);
+      const card = document.querySelector(cardSelector);
+      el.textContent = val === null ? '—' : `${Math.round(val)}%`;
+      if (val === null || !card) return;
+      card.className = 'hc ' + (val >= goodAbove ? 'ok' : val >= warnAbove ? 'warning' : 'danger');
+    }
+
+    /* ── Score ring chart ─────────────────────────────────────────────────────── */
+    function renderScoreRing(score) {
+      const color = score >= 75 ? '#39b992' : score >= 50 ? '#f5a623' : '#ff4d5e';
+      try {
+        if (_scoreChart) _scoreChart.destroy();
+        _scoreChart = new Chart($('scoreCanvas'), {
+          type: 'doughnut',
+          data: { datasets: [{ data: [score, 100 - score], backgroundColor: [color, 'rgba(255,255,255,0.06)'], borderWidth: 0 }] },
+          options: { cutout: '72%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { duration: 700 } },
+        });
+      } catch(_) {}
+      $('scoreNum').textContent = score;
+      $('scoreNum').style.color = color;
+    }
+
+    /* ── Grade badge ──────────────────────────────────────────────────────────── */
+    function renderGrade(grade) {
+      const el = $('scoreGrade');
+      el.textContent  = grade || '?';
+      el.className = `score-grade grade-${(grade || 'C').toUpperCase().charAt(0)}`;
+    }
+
+    /* ── Load base data ───────────────────────────────────────────────────────── */
+    async function loadPage() {
+      const [snap, bud, plan] = await Promise.all([
+        api('/api/dashboard'),
+        api('/api/budgets'),
+        api('/api/plan'),
+      ]);
+
+      // Health cards
+      const income  = snap.monthly_income;
+      const total   = (income || 0) + (snap.month_unplanned_income || 0);
+      const spend   = total > 0 ? snap.projected_eom_spent / total * 100 : null;
+      const save    = total > 0 ? Math.max(0, (total - snap.projected_eom_spent) / total * 100) : null;
+      const budOk   = bud.items.length ? bud.items.filter(b => !b.over).length / bud.items.length * 100 : null;
+
+      setHealthCard('hcSpend',  '#healthRow .hc:nth-child(1)', spend  !== null ? 100 - spend : null, 50, 30);
+      setHealthCard('hcSave',   '#healthRow .hc:nth-child(2)', save,   25, 10);
+      setHealthCard('hcBudget', '#healthRow .hc:nth-child(3)', budOk,  80, 50);
+
+      // Action plan
+      $('planList').innerHTML = plan.items.length
+        ? plan.items.map((item, i) => `
+            <div style="display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+              <div style="min-width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#39b992,#34d7bf);color:#041116;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${i + 1}</div>
+              <span style="font-size:13px;line-height:1.55;flex:1">${item.text}</span>
+            </div>`).join('')
+        : '<p class="empty">Add expenses to generate a plan.</p>';
+    }
+
+    /* ── Generate AI advice ───────────────────────────────────────────────────── */
+    $('adviceBtn').onclick = async () => {
+      const btn = $('adviceBtn');
+      btnLoad(btn, true);
+      $('aiSections').innerHTML = '<div class="ai-placeholder"><span class="spinner"></span><span>Analyzing your financial data…</span></div>';
+      $('scoreHero').hidden = true;
+      $('nextStepsPanel').hidden = true;
+
+      try {
+        const d = await api('/api/advice');
+
+        // Score hero
+        if (d.score != null) {
+          renderScoreRing(d.score);
+          renderGrade(d.grade);
+          $('scoreHeadline').textContent = d.headline || 'Analysis complete';
+          $('scoreDetail').textContent   = `Financial health score based on your spending, savings rate, and budget adherence.`;
+          $('scoreHero').hidden = false;
+        }
+
+        // Sections
+        if (Array.isArray(d.sections) && d.sections.length) {
+          $('aiSections').innerHTML = d.sections.map(s => `
+            <div class="ai-section">
+              <div class="ai-section-icon">${s.icon || '📌'}</div>
+              <div class="ai-section-content">
+                <h4>${s.title || ''}</h4>
+                <p>${s.body || ''}</p>
+              </div>
+            </div>`).join('');
+        } else if (d.text) {
+          $('aiSections').innerHTML = `<div class="panel glass"><div class="advice-box">${d.text}</div></div>`;
+        } else {
+          $('aiSections').innerHTML = '';
+        }
+
+        // Next steps
+        if (Array.isArray(d.next_steps) && d.next_steps.length) {
+          $('nextStepsList').innerHTML = d.next_steps.map((s, i) => `
+            <div class="next-step">
+              <div class="ns-num">${i + 1}</div>
+              <span class="ns-text">${s}</span>
+            </div>`).join('');
+          $('nextStepsPanel').hidden = false;
+        }
+
+        toast('AI analysis complete', 'success');
+      } catch (err) {
+        $('aiSections').innerHTML = `<p class="empty">${err.message}</p>`;
+        toast(err.message, 'error');
+      } finally {
+        btnLoad(btn, false);
+      }
+    };
+
+    $('genStrip').onclick = (e) => { if (!e.target.closest('button')) $('adviceBtn').click(); };
+    $('refreshBtn').onclick = () =>
+      ensureAuth().then(loadPage).then(() => toast('Refreshed', 'success')).catch(e => toast(e.message, 'error'));
+
+    ensureAuth().then(loadPage).catch(e => toast(e.message, 'error'));
+  </script>
+</body>
+</html>

@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Finance · Dashboard</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=8">
+  <style>
+    /* ── Full-width hero ─────────────────────────────────────────── */
+    .hero-card {
+      background: linear-gradient(135deg, rgba(57,185,146,.18) 0%, rgba(93,110,255,.14) 100%);
+      border: 1px solid rgba(57,185,146,.3);
+      border-radius: var(--radius);
+      padding: 32px 36px 28px;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .hero-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at top left, rgba(57,185,146,.14), transparent 55%);
+      pointer-events: none;
+    }
+    .hero-left  { flex: 1; min-width: 240px; }
+    .hero-right { display: flex; gap: 12px; flex-wrap: wrap; flex-shrink: 0; }
+    .hero-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand); margin: 0 0 6px; }
+    .hero-balance { font-size: clamp(36px,5vw,58px); font-weight: 800; line-height: 1.05; margin: 0 0 6px; letter-spacing: -.025em; }
+    .hero-balance.ok      { color: #fff; }
+    .hero-balance.warning { color: var(--warning); }
+    .hero-balance.danger  { color: var(--danger); }
+    .hero-balance.unknown { color: var(--muted); }
+    .hero-sub { font-size: 13px; color: var(--muted); margin: 0 0 18px; }
+    .hero-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .hero-pill {
+      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1);
+      border-radius: 99px; padding: 5px 13px; font-size: 12px;
+    }
+    .hero-pill strong { color: #fff; margin-left: 4px; }
+    .hero-badge {
+      position: absolute; top: 22px; right: 22px;
+      padding: 5px 14px; border-radius: 99px; font-size: 11px; font-weight: 800; letter-spacing: .04em;
+    }
+    .hero-badge.ok      { background: rgba(57,185,146,.2);   color: var(--success); border: 1px solid rgba(57,185,146,.4); }
+    .hero-badge.warning { background: rgba(245,166,35,.2);   color: var(--warning); border: 1px solid rgba(245,166,35,.4); }
+    .hero-badge.danger  { background: rgba(255,77,94,.2);    color: var(--danger);  border: 1px solid rgba(255,77,94,.4); }
+    .hero-badge.unknown { background: rgba(255,255,255,.06); color: var(--muted);   border: 1px solid var(--line); }
+    .hero-mini-card {
+      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1);
+      border-radius: 14px; padding: 14px 18px; text-align: center; min-width: 110px;
+    }
+    .hero-mini-card .hm-val { font-size: 17px; font-weight: 800; }
+    .hero-mini-card .hm-lbl { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-top: 3px; }
+
+    /* ── 3-column main grid ──────────────────────────────────────── */
+    .dash-3col {
+      display: grid;
+      grid-template-columns: minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr);
+      gap: 16px;
+      margin-bottom: 16px;
+      align-items: start;
+    }
+    @media (max-width: 1024px) { .dash-3col { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 640px)  { .dash-3col { grid-template-columns: 1fr; } }
+
+    /* ── Bottom 2-col ────────────────────────────────────────────── */
+    .dash-2col {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+      gap: 16px;
+    }
+    @media (max-width: 768px) { .dash-2col { grid-template-columns: 1fr; } }
+
+    /* ── Doughnut panel ──────────────────────────────────────────── */
+    .pie-wrap {
+      position: relative;
+      height: 280px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pie-wrap canvas { max-height: 280px; }
+    .pie-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; margin-top: 10px; }
+    .ple-item { display: flex; align-items: center; gap: 6px; font-size: 11px; min-width: 0; }
+    .ple-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .ple-name { color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; text-transform: capitalize; }
+    .ple-val { font-weight: 800; white-space: nowrap; font-size: 11px; }
+    .ple-pct { color: var(--muted); font-weight: 400; margin-left: 2px; }
+
+    /* ── Trend chart ─────────────────────────────────────────────── */
+    .trend-wrap {
+      position: relative;
+      height: 280px;
+    }
+    .trend-wrap canvas { height: 280px !important; }
+
+    /* ── Transaction items ───────────────────────────────────────── */
+    .tx-item-d {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 10px;
+      background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
+      margin-bottom: 7px;
+      transition: background .15s, border-color .15s;
+    }
+    .tx-item-d:hover { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); }
+    .tx-dot-d { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .tx-info-d { flex: 1; min-width: 0; }
+    .tx-name-d { font-weight: 700; font-size: 13px; text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tx-time-d { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .tx-amt-d  { font-weight: 800; font-size: 13px; color: var(--danger); white-space: nowrap; }
+
+    /* ── Plan items ──────────────────────────────────────────────── */
+    .plan-row {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .plan-row:last-child { border-bottom: none; }
+    .plan-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); flex-shrink: 0; margin-top: 6px; }
+    .plan-txt  { font-size: 13px; line-height: 1.55; }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    .page-footer {
+      margin-top: 48px; padding: 24px 0 12px;
+      border-top: 1px solid var(--line);
+      text-align: center; font-size: 12px; color: var(--muted);
+    }
+    .footer-links { display: flex; justify-content: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+    .footer-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 18px; border-radius: 99px; border: 1px solid var(--line);
+      color: var(--muted); text-decoration: none; font-size: 12px; font-weight: 700;
+      transition: all .2s;
+    }
+    .footer-link:hover { border-color: var(--brand); color: var(--brand); background: rgba(57,185,146,.06); }
+
+    /* ── User chip ───────────────────────────────────────────────── */
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .user-chip {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,.06); border: 1px solid var(--line);
+      border-radius: 99px; padding: 5px 12px 5px 8px; font-size: 12px; font-weight: 700;
+    }
+    .user-chip .avatar {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+
+  <main class="shell">
+
+    <!-- Header -->
+    <header class="header glass">
+      <div class="header-meta">
+        <p class="kicker">AI Financial Assistant</p>
+        <h1 id="pageTitle">Dashboard</h1>
+      </div>
+      <div class="header-right">
+        <div class="user-chip" id="userChip" hidden>
+          <div class="avatar" id="userAvatar"></div>
+          <span id="userLabel"></span>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="refreshBtn">↻ Refresh</button>
+        <button class="btn btn-sm" id="logoutBtn" style="background:rgba(255,77,94,.15);color:var(--danger);border:1px solid rgba(255,77,94,.3)">Logout</button>
+      </div>
+    </header>
+
+    <!-- Nav -->
+    <nav class="topnav glass">
+      <a data-page="dashboard"    href="/">Dashboard</a>
+      <a data-page="money"        href="/static/money.html">Budget</a>
+      <a data-page="goals"        href="/static/goals.html">Goals</a>
+      <a data-page="advice"       href="/static/advice.html">AI Advice</a>
+      <a data-page="transactions" href="/static/transactions.html">Transactions</a>
+    </nav>
+
+    <!-- Risk banner -->
+    <div class="risk-banner" id="riskBanner" hidden></div>
+
+    <!-- ── Hero ── -->
+    <div class="hero-card">
+      <div class="hero-left">
+        <p class="hero-label">Available Balance</p>
+        <p class="hero-balance unknown" id="heroBalance">—</p>
+        <p class="hero-sub" id="heroSub">Loading…</p>
+        <div class="hero-pills" id="heroPills"></div>
+      </div>
+      <div class="hero-right" id="heroRight"></div>
+      <div class="hero-badge unknown" id="heroBadge">Loading</div>
+    </div>
+
+    <!-- ── 3-column: Doughnut | Budget | Transactions ── -->
+    <div class="dash-3col">
+
+      <!-- Spending breakdown doughnut -->
+      <article class="panel glass">
+        <h2>Spending Breakdown</h2>
+        <div id="pieEmpty" class="empty" hidden>No expenses this month yet.</div>
+        <div class="pie-wrap" id="pieWrap">
+          <canvas id="pieCanvas"></canvas>
+        </div>
+        <div id="pieLegend" class="pie-legend"></div>
+      </article>
+
+      <!-- Budget tracker -->
+      <article class="panel glass">
+        <h2>Budget Tracker</h2>
+        <div class="budget-list" id="budgetList">
+          <p class="empty">Loading…</p>
+        </div>
+      </article>
+
+      <!-- Recent transactions -->
+      <article class="panel glass">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <h2 style="margin:0">Recent Transactions</h2>
+          <a href="/static/transactions.html" class="btn btn-ghost btn-sm" style="font-size:11px">See all →</a>
+        </div>
+        <div id="recentTx"><p class="empty">Loading…</p></div>
+      </article>
+
+    </div>
+
+    <!-- ── Full-width area trend chart ── -->
+    <article class="panel glass" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 style="margin:0" id="trendTitle">Monthly Spending Trend</h2>
+        <span id="trendAvg" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="trendEmpty" class="empty" hidden>Add expenses to see your spending trend.</div>
+      <div class="trend-wrap" id="trendWrap">
+        <canvas id="trendCanvas"></canvas>
+      </div>
+    </article>
+
+    <!-- ── Bottom 2-col: Plan + Top categories ── -->
+    <div class="dash-2col">
+
+      <article class="panel glass">
+        <h2>7-Day Action Plan</h2>
+        <div id="planList"><p class="empty">Loading…</p></div>
+      </article>
+
+      <article class="panel glass">
+        <h2>Top Spending Categories</h2>
+        <div id="topCats"><p class="empty">Loading…</p></div>
+      </article>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="page-footer">
+      <p>AI Finance · Personal Finance Assistant powered by AI</p>
+      <div class="footer-links">
+        <a class="footer-link" id="botLink" href="https://t.me/cleveraifinancehelperbot" target="_blank" rel="noopener">✈ Telegram Bot</a>
+        <a class="footer-link" href="/static/advice.html">✦ AI Advice</a>
+        <a class="footer-link" href="/static/money.html">＋ Add Expense</a>
+        <a class="footer-link" href="/static/goals.html">◎ Goals</a>
+      </div>
+    </footer>
+
+  </main>
+
+  <script src="/static/common.js?v=8"></script>
+  <script>
+    setActiveNav('dashboard');
+
+    try {
+      Chart.defaults.color       = '#8aa5bf';
+      Chart.defaults.borderColor = 'rgba(255,255,255,0.07)';
+      Chart.defaults.font.family = 'Manrope, system-ui, sans-serif';
+      Chart.defaults.font.size   = 12;
+    } catch(_) {}
+
+    const CAT_COLORS = ['#39b992','#5d6eff','#f5a623','#ff4d5e','#34d7bf','#a78bfa','#fb923c','#4ade80','#60a5fa','#f472b6'];
+    const CAT_ICONS  = { food:'🍔', coffee:'☕', car:'🚗', rent:'🏠', utilities:'💡', health:'💊', shopping:'🛍', entertainment:'🎮', transport:'🚌', education:'📚', gym:'🏋' };
+    function catIcon(n) { for (const [k,v] of Object.entries(CAT_ICONS)) if (n.includes(k)) return v; return '💳'; }
+
+    let _pieChart   = null;
+    let _trendChart = null;
+
+    /* ── User chip ─────────────────────────────────────────────────────────── */
+    function initUser() {
+      if (!_user) return;
+      const name = _user.username || _user.first_name || 'User';
+      document.getElementById('userLabel').textContent  = name;
+      document.getElementById('userAvatar').textContent = name[0].toUpperCase();
+      document.getElementById('userChip').hidden = false;
+      document.getElementById('logoutBtn').onclick = logout;
+    }
+
+    /* ── Health score ──────────────────────────────────────────────────────── */
+    function healthOf(snap) {
+      if (!snap.monthly_income) return { label: 'No Income Set', cls: 'unknown' };
+      const r = snap.projected_eom_spent / ((snap.monthly_income || 0) + (snap.month_unplanned_income || 0));
+      if (r < 0.70) return { label: '✓ On Track', cls: 'ok' };
+      if (r < 0.90) return { label: '⚠ Caution',  cls: 'warning' };
+      return               { label: '✕ At Risk',   cls: 'danger' };
+    }
+
+    /* ── Hero ──────────────────────────────────────────────────────────────── */
+    function renderHero(snap, profile) {
+      const income = snap.monthly_income, unp = snap.month_unplanned_income || 0;
+      const total  = (income || 0) + unp;
+      const avail  = income !== null ? total - snap.month_spent : null;
+      const health = healthOf(snap);
+
+      const balEl = document.getElementById('heroBalance');
+      if (avail === null) {
+        balEl.className = 'hero-balance unknown'; balEl.textContent = 'Set Income First';
+      } else {
+        const cls = avail < 0 ? 'danger' : avail < total * .15 ? 'warning' : 'ok';
+        balEl.className = `hero-balance ${cls}`;
+        balEl.textContent = `${money(avail)} so'm`;
+      }
+      const netWorth = profile?.net_worth;
+      document.getElementById('heroSub').textContent =
+        `${snap.days_passed} of ${snap.days_in_month} days · ${snap.month_name}` +
+        (netWorth ? ` · Net Worth: ${money(netWorth)} so'm` : '');
+
+      const pills = [
+        { lbl: 'Income',    val: income ? `${money(income)} so'm` : 'Not set' },
+        { lbl: 'Spent',     val: `${money(snap.month_spent)} so'm` },
+        { lbl: 'Projected', val: snap.projected_balance === null ? '?' : `${money(snap.projected_balance)} so'm` },
+      ];
+      if (unp > 0) pills.push({ lbl: 'Bonus', val: `+${money(unp)} so'm` });
+      document.getElementById('heroPills').innerHTML = pills.map(p =>
+        `<span class="hero-pill">${p.lbl}:<strong>${p.val}</strong></span>`
+      ).join('');
+
+      const pctUsed  = total > 0 ? Math.round(snap.month_spent / total * 100) : 0;
+      const daysLeft = snap.days_in_month - snap.days_passed;
+      const dailyBudget = avail !== null && daysLeft > 0 ? Math.round(avail / daysLeft) : null;
+      const dbColor = dailyBudget === null ? 'var(--muted)' : dailyBudget < 0 ? 'var(--danger)' : dailyBudget < 50000 ? 'var(--warning)' : 'var(--brand)';
+      document.getElementById('heroRight').innerHTML = `
+        <div class="hero-mini-card"><div class="hm-val">${pctUsed}%</div><div class="hm-lbl">Income Used</div></div>
+        <div class="hero-mini-card"><div class="hm-val">${daysLeft}</div><div class="hm-lbl">Days Left</div></div>
+        <div class="hero-mini-card"><div class="hm-val" style="color:${dbColor}">${dailyBudget !== null ? money(dailyBudget)+' so\'m' : '—'}</div><div class="hm-lbl">Daily Budget</div></div>
+        <div class="hero-mini-card"><div class="hm-val" style="color:${snap.overspent?.length ? 'var(--danger)' : 'var(--success)'}">${snap.overspent?.length ?? 0}</div><div class="hm-lbl">Over Budget</div></div>
+      `;
+
+      const badge = document.getElementById('heroBadge');
+      badge.textContent = health.label; badge.className = `hero-badge ${health.cls}`;
+
+      const banner = document.getElementById('riskBanner');
+      if (snap.projected_balance !== null && snap.projected_balance < 0) {
+        banner.textContent = `Deficit alert: projected month-end balance is −${money(Math.abs(snap.projected_balance))} so'm.`;
+        banner.hidden = false;
+      } else { banner.hidden = true; }
+
+      document.getElementById('pageTitle').textContent = `Dashboard · ${snap.today}`;
+    }
+
+    /* ── Category grouper ─────────────────────────────────────────────────── */
+    const CAT_GROUP_MAP = {
+      '🏠 Housing':   ['rent','utilities','electricity','water','gas','internet','maintenance'],
+      '🍽 Dining':    ['food','groceries','restaurant','coffee','delivery','cafe','lunch','dinner','breakfast'],
+      '🚗 Transport': ['car','fuel','taxi','transport','parking','uber','bus','metro'],
+      '🛍 Shopping':  ['shopping','clothing','electronics','household','beauty','accessories','clothes'],
+      '💊 Health':    ['health','pharmacy','doctor','gym','sports','dentist','medicine'],
+      '📚 Self':      ['education','books','courses','entertainment','subscriptions','hobbies','cinema','gaming'],
+    };
+
+    function groupByMacro(byCategory) {
+      const totals = {};
+      for (const [cat, amt] of byCategory) {
+        let matched = false;
+        for (const [group, keywords] of Object.entries(CAT_GROUP_MAP)) {
+          if (keywords.some(k => cat.toLowerCase().includes(k) || k.includes(cat.toLowerCase()))) {
+            totals[group] = (totals[group] || 0) + amt;
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) totals['📦 Other'] = (totals['📦 Other'] || 0) + amt;
+      }
+      return Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    }
+
+    /* ── Doughnut ──────────────────────────────────────────────────────────── */
+    function renderPie(byCategory) {
+      const wrap  = document.getElementById('pieWrap');
+      const empty = document.getElementById('pieEmpty');
+      const legEl = document.getElementById('pieLegend');
+      if (!byCategory.length) { wrap.hidden = true; empty.hidden = false; legEl.innerHTML = ''; return; }
+      wrap.hidden = false; empty.hidden = true;
+
+      const grouped = groupByMacro(byCategory);
+      const labels = grouped.map(([c]) => c);
+      const data   = grouped.map(([,v]) => v);
+      const total  = data.reduce((a,b) => a+b, 0);
+
+      function fmtShort(v) {
+        if (v >= 1e9) return `${(v/1e9).toFixed(1)}B`;
+        if (v >= 1e6) return `${(v/1e6).toFixed(1)}M`;
+        if (v >= 1e3) return `${(v/1e3).toFixed(0)}K`;
+        return money(v);
+      }
+
+      const centerPlugin = {
+        id: 'centerText',
+        beforeDraw(chart) {
+          const {ctx} = chart;
+          const meta = chart.getDatasetMeta(0);
+          if (!meta.data.length) return;
+          const cx = meta.data[0].x, cy = meta.data[0].y;
+          ctx.save();
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.shadowColor = 'rgba(57,185,146,0.4)'; ctx.shadowBlur = 10;
+          ctx.font = '800 20px Manrope'; ctx.fillStyle = '#ebf4ff';
+          ctx.fillText(fmtShort(total) + " so'm", cx, cy - 10);
+          ctx.shadowBlur = 0;
+          ctx.font = '600 11px Manrope'; ctx.fillStyle = '#8aa5bf';
+          ctx.fillText('Total Spent', cx, cy + 11);
+          ctx.restore();
+        }
+      };
+
+      if (_pieChart) _pieChart.destroy();
+      _pieChart = new Chart(document.getElementById('pieCanvas'), {
+        type: 'doughnut',
+        plugins: [centerPlugin],
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: CAT_COLORS.slice(0, labels.length),
+            borderWidth: 3,
+            borderColor: '#08131f',
+            hoverBorderColor: 'rgba(255,255,255,0.5)',
+            hoverOffset: 8,
+          }]
+        },
+        options: {
+          cutout: '70%',
+          animation: { animateScale: true, animateRotate: true, duration: 800, easing: 'easeOutQuart' },
+          layout: { padding: 4 },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${money(ctx.parsed)} so'm (${((ctx.parsed/total)*100).toFixed(1)}%)` } }
+          }
+        }
+      });
+
+      // HTML legend below the canvas — 2-column grid, no overflow
+      legEl.innerHTML = labels.map((lbl, i) => {
+        const pct = ((data[i] / total) * 100).toFixed(0);
+        return `<div class="ple-item">
+          <div class="ple-dot" style="background:${CAT_COLORS[i % CAT_COLORS.length]}"></div>
+          <span class="ple-name">${lbl}</span>
+          <span class="ple-val">${money(data[i])}<span class="ple-pct"> ${pct}%</span></span>
+        </div>`;
+      }).join('');
+    }
+
+    /* ── Area trend chart ──────────────────────────────────────────────────── */
+    function renderTrend(daily, monthName) {
+      const wrap  = document.getElementById('trendWrap');
+      const empty = document.getElementById('trendEmpty');
+      document.getElementById('trendTitle').textContent = `Daily Spending — ${monthName}`;
+
+      const hasData = daily.some(([,v]) => v > 0);
+      if (!hasData) { wrap.hidden = true; empty.hidden = false; return; }
+      wrap.hidden = false; empty.hidden = true;
+
+      const labels = daily.map(([d]) => {
+        const parts = d.split('-');
+        return `${parts[2]} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+parts[1]-1]}`;
+      });
+      const values   = daily.map(([,v]) => v);
+      const nonZero  = values.filter(v => v > 0);
+      const avg      = nonZero.length ? nonZero.reduce((a,b) => a+b,0) / nonZero.length : 0;
+      const todayIdx = daily.length - 1;
+
+      // Gradient area fill — must be created from canvas context
+      function makeGradient(chart) {
+        const {ctx, chartArea} = chart;
+        if (!chartArea) return 'rgba(57,185,146,0.2)';
+        const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        g.addColorStop(0,   'rgba(57,185,146,0.45)');
+        g.addColorStop(0.5, 'rgba(57,185,146,0.15)');
+        g.addColorStop(1,   'rgba(57,185,146,0.0)');
+        return g;
+      }
+
+      if (_trendChart) _trendChart.destroy();
+      _trendChart = new Chart(document.getElementById('trendCanvas'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Daily Spending',
+              data: values,
+              borderColor: '#39b992',
+              borderWidth: 2.5,
+              backgroundColor: (ctx) => makeGradient(ctx.chart),
+              fill: true,
+              tension: 0.4,
+              pointRadius: values.map((_, i) => i === todayIdx ? 7 : 3),
+              pointBackgroundColor: values.map((v, i) =>
+                i === todayIdx ? '#5d6eff' : v === 0 ? 'rgba(255,255,255,0.15)' : '#39b992'
+              ),
+              pointBorderColor: values.map((_, i) => i === todayIdx ? '#fff' : 'transparent'),
+              pointBorderWidth: values.map((_, i) => i === todayIdx ? 2 : 0),
+              pointHoverRadius: 7,
+              order: 2,
+            },
+            {
+              label: 'Daily Average',
+              data: values.map(() => Math.round(avg)),
+              borderColor: 'rgba(245,166,35,0.6)',
+              borderWidth: 2,
+              borderDash: [8, 5],
+              pointRadius: 0,
+              fill: false,
+              tension: 0,
+              order: 1,
+            }
+          ]
+        },
+        options: {
+          animation: { duration: 900, easing: 'easeOutCubic' },
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { usePointStyle: true, pointStyleWidth: 8, padding: 20 } },
+            tooltip: {
+              backgroundColor: 'rgba(8,19,31,0.92)',
+              borderColor: 'rgba(255,255,255,0.12)',
+              borderWidth: 1,
+              padding: 12,
+              callbacks: {
+                label: ctx => ctx.datasetIndex === 1
+                  ? ` avg: ${money(ctx.parsed.y)} so'm`
+                  : ` ${money(ctx.parsed.y)} so'm`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: {
+                maxTicksLimit: 10,
+                maxRotation: 0,
+              }
+            },
+            y: {
+              grid: { color: 'rgba(255,255,255,0.05)' },
+              ticks: {
+                callback: v => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : v >= 1e3 ? `${(v/1e3).toFixed(0)}K` : v
+              }
+            }
+          }
+        }
+      });
+
+      const avgFmt = money(Math.round(avg));
+      document.getElementById('trendAvg').textContent = `avg ${avgFmt} so'm / day`;
+    }
+
+    /* ── Recent transactions ───────────────────────────────────────────────── */
+    function renderRecentTx(items) {
+      const el = document.getElementById('recentTx');
+      if (!items.length) { el.innerHTML = '<p class="empty">No transactions yet.</p>'; return; }
+      el.innerHTML = items.slice(0, 7).map((x, i) => {
+        const color = CAT_COLORS[i % CAT_COLORS.length];
+        return `<div class="tx-item-d">
+          <div class="tx-dot-d" style="background:${color}22;color:${color}">${catIcon(x.category)}</div>
+          <div class="tx-info-d">
+            <div class="tx-name-d">${x.category}</div>
+            <div class="tx-time-d">${timeAgo(x.created_at)}</div>
+          </div>
+          <div class="tx-amt-d">−${money(x.amount)} so'm</div>
+        </div>`;
+      }).join('');
+    }
+
+    /* ── Action plan ───────────────────────────────────────────────────────── */
+    function renderPlan(items) {
+      const el = document.getElementById('planList');
+      if (!items.length) { el.innerHTML = '<p class="empty">No plan yet.</p>'; return; }
+      el.innerHTML = items.map(item =>
+        `<div class="plan-row"><div class="plan-dot"></div><p class="plan-txt">${item.text}</p></div>`
+      ).join('');
+    }
+
+    /* ── Top categories ────────────────────────────────────────────────────── */
+    function renderTopCats(byCategory) {
+      const el = document.getElementById('topCats');
+      const top = byCategory.slice(0, 6);
+      if (!top.length) { el.innerHTML = '<p class="empty">No expenses this month.</p>'; return; }
+      const max = top[0][1];
+      el.innerHTML = top.map(([cat, amt], i) => {
+        const pct   = max > 0 ? (amt / max * 100).toFixed(0) : 0;
+        const color = CAT_COLORS[i % CAT_COLORS.length];
+        return `<div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+            <span style="font-weight:700;display:flex;align-items:center;gap:6px">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
+              ${cat}
+            </span>
+            <span style="font-weight:800;color:${color}">${money(amt)} so'm</span>
+          </div>
+          <div style="height:5px;background:rgba(255,255,255,.07);border-radius:99px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width .6s ease"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    /* ── Main load ─────────────────────────────────────────────────────────── */
+    async function loadDashboard() {
+      const [snap, budgets, txData, planData, profile] = await Promise.all([
+        api('/api/dashboard'),
+        api('/api/budgets'),
+        api('/api/transactions?limit=7'),
+        api('/api/plan'),
+        api('/api/profile'),
+      ]);
+
+      renderHero(snap, profile);
+      renderPie(snap.by_category);
+      renderTrend(snap.daily_spending, snap.month_name);
+      renderBudgets(budgets.items, 'budgetList');
+      renderRecentTx(txData.items);
+      renderPlan(planData.items);
+      renderTopCats(snap.by_category);
+
+      try {
+        const cfg = await fetch('/api/config').then(r => r.json());
+        if (cfg.bot_username) {
+          const link = document.getElementById('botLink');
+          link.href = `https://t.me/${cfg.bot_username}`;
+          link.textContent = `✈ @${cfg.bot_username}`;
+        }
+      } catch (_) {}
+    }
+
+    document.getElementById('refreshBtn').onclick = () =>
+      ensureAuth().then(loadDashboard).then(() => toast('Refreshed', 'success')).catch(e => toast(e.message, 'error'));
+
+    ensureAuth()
+      .then(() => { initUser(); return loadDashboard(); })
+      .catch(e => toast(e.message, 'error'));
+  </script>
+</body>
+</html>

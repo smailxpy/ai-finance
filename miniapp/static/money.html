@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Budget · AI Finance</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=8">
+  <style>
+    .balance-hero {
+      background: linear-gradient(135deg, rgba(93,110,255,.16), rgba(57,185,146,.12));
+      border: 1px solid rgba(93,110,255,.3);
+      border-radius: var(--radius);
+      padding: 20px 22px; margin-bottom: 14px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    }
+    .balance-hero .bh-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 4px; }
+    .balance-hero .bh-val   { font-size: 28px; font-weight: 800; margin: 0; line-height: 1.1; }
+    .balance-hero .bh-val.ok      { color: var(--success); }
+    .balance-hero .bh-val.warn    { color: var(--warning); }
+    .balance-hero .bh-val.danger  { color: var(--danger); }
+    .balance-hero .bh-val.unknown { color: var(--muted); }
+    .balance-hero .bh-sub  { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
+    .ring-wrap { flex-shrink: 0; width: 80px; height: 80px; position: relative; }
+    .ring-wrap canvas { width: 80px !important; height: 80px !important; }
+    .ring-pct { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; line-height: 1.1; }
+    .ring-pct small { font-size: 9px; font-weight: 600; color: var(--muted); }
+
+    /* Category picker */
+    .cat-picker { margin-bottom: 8px; }
+    .cat-group-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .cat-tab {
+      padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line);
+      background: transparent; color: var(--muted); font: inherit; font-size: 12px;
+      font-weight: 700; cursor: pointer; transition: all .15s;
+    }
+    .cat-tab:hover { border-color: var(--brand); color: var(--brand); }
+    .cat-tab.active { background: var(--brand); border-color: var(--brand); color: #041419; }
+    .cat-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px; }
+    .cat-chip {
+      padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line);
+      background: rgba(255,255,255,.04); color: var(--text); font: inherit; font-size: 12px;
+      cursor: pointer; transition: all .15s; font-weight: 600;
+    }
+    .cat-chip:hover { border-color: var(--brand); background: rgba(57,185,146,.08); color: var(--brand); }
+    .cat-chip.selected { background: rgba(57,185,146,.15); border-color: var(--brand); color: var(--brand); }
+
+    .form-icon { font-size: 20px; margin-bottom: 6px; display: block; }
+    .panel-accent-green { border-left: 3px solid var(--brand) !important; }
+    .panel-accent-blue  { border-left: 3px solid #5d6eff !important; }
+    .panel-accent-orange{ border-left: 3px solid var(--warning) !important; }
+    .panel-accent-teal  { border-left: 3px solid #34d7bf !important; }
+
+    .seed-banner {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+      padding: 14px 18px; margin-bottom: 14px;
+      background: linear-gradient(135deg, rgba(93,110,255,.1), rgba(57,185,146,.08));
+      border: 1px dashed rgba(93,110,255,.4); border-radius: var(--radius);
+    }
+    .seed-banner p { margin: 0; font-size: 13px; color: var(--muted); }
+    .seed-banner strong { color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+
+  <main class="shell">
+    <header class="header glass">
+      <div class="header-meta">
+        <p class="kicker">Money Management</p>
+        <h1>Budget</h1>
+      </div>
+    </header>
+
+    <nav class="topnav glass">
+      <a data-page="dashboard"    href="/">Dashboard</a>
+      <a data-page="money"        href="/static/money.html">Budget</a>
+      <a data-page="goals"        href="/static/goals.html">Goals</a>
+      <a data-page="advice"       href="/static/advice.html">AI Advice</a>
+      <a data-page="transactions" href="/static/transactions.html">Transactions</a>
+    </nav>
+
+    <!-- Balance hero -->
+    <div class="balance-hero" id="balanceHero">
+      <div>
+        <p class="bh-label">Available Balance</p>
+        <p class="bh-val unknown" id="heroVal">—</p>
+        <p class="bh-sub" id="heroSub">Loading…</p>
+      </div>
+      <div class="ring-wrap">
+        <canvas id="ringCanvas"></canvas>
+        <div class="ring-pct" id="ringPct"><span>—</span><small>used</small></div>
+      </div>
+    </div>
+
+    <!-- AI Budget Recommendation -->
+    <article class="panel glass" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+        <div>
+          <h2 style="margin:0 0 4px">AI Budget Recommendations</h2>
+          <p style="margin:0;font-size:12px;color:var(--muted)">Adaptive budgeting · Savings suggestions · Goal-based planning</p>
+        </div>
+        <button class="btn btn-sm" id="recommendBtn" style="flex-shrink:0;background:linear-gradient(135deg,#5d6eff,#818cf8)">
+          <span class="spinner" id="recommendSpinner" hidden></span>Get AI Plan
+        </button>
+      </div>
+      <p class="empty" id="recommendPlaceholder" style="margin:0;padding:8px 0">Click "Get AI Plan" to receive personalized budget recommendations based on your spending patterns.</p>
+      <div id="recommendResults" hidden>
+        <div id="recommendHeadline" style="font-size:15px;font-weight:800;color:var(--brand);margin-bottom:12px;padding:12px 14px;background:rgba(57,185,146,.08);border:1px solid rgba(57,185,146,.2);border-radius:12px"></div>
+        <div id="recommendCards" style="display:grid;gap:8px;margin-bottom:12px"></div>
+        <div id="recommendTip" style="font-size:13px;line-height:1.6;padding:12px 14px;background:rgba(93,110,255,.08);border:1px solid rgba(93,110,255,.2);border-radius:12px;color:#c4c9ff"></div>
+      </div>
+    </article>
+
+    <!-- Forms grid -->
+    <div class="grid-2">
+
+      <!-- Add Expense -->
+      <article class="panel glass panel-accent-green">
+        <span class="form-icon">💸</span>
+        <h2>Add Expense</h2>
+        <form id="expenseForm" class="stack">
+          <!-- Category picker -->
+          <div>
+            <label>Category Group</label>
+            <div class="cat-picker">
+              <div class="cat-group-tabs" id="catTabs"></div>
+              <div class="cat-chips" id="catChips"></div>
+            </div>
+            <label for="expenseCategory" style="margin-top:8px">Category name</label>
+            <input id="expenseCategory" placeholder="e.g. food, rent, taxi…" required autocomplete="off">
+          </div>
+          <div>
+            <label for="expenseAmount">Amount (so'm)</label>
+            <input id="expenseAmount" type="number" step="1" min="1" placeholder="e.g. 250 000" required>
+          </div>
+          <div>
+            <label for="expenseDate">Date</label>
+            <input id="expenseDate" type="date" required>
+          </div>
+          <button class="btn" type="submit" id="expenseBtn">Save Expense</button>
+        </form>
+      </article>
+
+      <!-- Monthly Income -->
+      <article class="panel glass panel-accent-blue">
+        <span class="form-icon">💰</span>
+        <h2>Monthly Income</h2>
+        <form id="incomeForm" class="stack">
+          <div>
+            <label for="incomeInput">Monthly Income (so'm)</label>
+            <input id="incomeInput" type="number" step="1" min="1" placeholder="e.g. 20 000 000" required>
+          </div>
+          <button class="btn" type="submit" id="incomeBtn" style="background:linear-gradient(135deg,#5d6eff,#818cf8)">Save Income</button>
+        </form>
+
+        <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+          <span class="form-icon">🏦</span>
+          <h2>Net Worth</h2>
+          <form id="netWorthForm" class="stack">
+            <div>
+              <label for="netWorthInput">Total Net Worth (so'm)</label>
+              <input id="netWorthInput" type="number" step="1" min="1" placeholder="e.g. 120 000 000" required>
+            </div>
+            <button class="btn" type="submit" id="netWorthBtn" style="background:linear-gradient(135deg,#34d7bf,#39b992)">Save Net Worth</button>
+          </form>
+        </div>
+      </article>
+
+      <!-- Set Budget -->
+      <article class="panel glass panel-accent-orange">
+        <span class="form-icon">🎯</span>
+        <h2>Set Budget</h2>
+        <form id="budgetForm" class="stack">
+          <div>
+            <label for="budgetCategory">Category</label>
+            <input id="budgetCategory" placeholder="food, rent, shopping…" required>
+          </div>
+          <div>
+            <label for="budgetLimit">Monthly Limit (so'm)</label>
+            <input id="budgetLimit" type="number" step="1" min="1" placeholder="e.g. 1 500 000" required>
+          </div>
+          <button class="btn" type="submit" id="budgetBtn" style="background:linear-gradient(135deg,#f5a623,#f5d020);color:#111">Save Budget</button>
+        </form>
+      </article>
+
+      <!-- Unplanned Income -->
+      <article class="panel glass panel-accent-teal">
+        <span class="form-icon">🎁</span>
+        <h2>Unplanned Income</h2>
+        <form id="unplannedForm" class="stack">
+          <div>
+            <label for="unplannedAmount">Amount (so'm)</label>
+            <input id="unplannedAmount" type="number" step="1" min="1" placeholder="e.g. 500 000" required>
+          </div>
+          <div>
+            <label for="unplannedSource">Source (optional)</label>
+            <input id="unplannedSource" placeholder="bonus, freelance, gift…">
+          </div>
+          <button class="btn" type="submit" id="unplannedBtn" style="background:linear-gradient(135deg,#34d7bf,#39b992)">Save Bonus</button>
+        </form>
+      </article>
+
+    </div>
+  </main>
+
+  <script src="/static/common.js?v=8"></script>
+  <script>
+    setActiveNav('money');
+
+    try {
+      Chart.defaults.color       = '#8aa5bf';
+      Chart.defaults.borderColor = 'rgba(255,255,255,0.07)';
+      Chart.defaults.font.family = 'Manrope, system-ui, sans-serif';
+    } catch(_) {}
+
+    let _ringChart = null;
+
+    // ── Category groups ──────────────────────────────────────────────────────
+    const CAT_GROUPS = {
+      '🏠 Housing':   ['rent', 'utilities', 'electricity', 'water', 'gas', 'internet', 'maintenance'],
+      '🍽 Dining':    ['food', 'groceries', 'restaurant', 'coffee', 'delivery', 'cafe'],
+      '🚗 Transport': ['car', 'fuel', 'taxi', 'public transport', 'parking', 'uber'],
+      '🛍 Shopping':  ['shopping', 'clothing', 'electronics', 'household', 'beauty', 'accessories'],
+      '💊 Health':    ['health', 'pharmacy', 'doctor', 'gym', 'sports', 'dentist'],
+      '📚 Self':      ['education', 'books', 'courses', 'entertainment', 'subscriptions', 'hobbies'],
+    };
+
+    let activeGroup = '🏠 Housing';
+
+    function renderCatTabs() {
+      $('catTabs').innerHTML = Object.keys(CAT_GROUPS).map(g =>
+        `<button type="button" class="cat-tab${g === activeGroup ? ' active' : ''}" data-group="${g}">${g}</button>`
+      ).join('');
+      $('catTabs').querySelectorAll('.cat-tab').forEach(btn => {
+        btn.onclick = () => { activeGroup = btn.dataset.group; renderCatTabs(); renderCatChips(); };
+      });
+    }
+
+    function renderCatChips() {
+      const current = $('expenseCategory').value.trim().toLowerCase();
+      $('catChips').innerHTML = CAT_GROUPS[activeGroup].map(c =>
+        `<button type="button" class="cat-chip${c === current ? ' selected' : ''}" data-cat="${c}">${c}</button>`
+      ).join('');
+      $('catChips').querySelectorAll('.cat-chip').forEach(btn => {
+        btn.onclick = () => {
+          $('expenseCategory').value = btn.dataset.cat;
+          renderCatChips(); // re-render to show selected state
+        };
+      });
+    }
+
+    // Default date = today
+    function setDefaultDate() {
+      $('expenseDate').value = new Date().toISOString().slice(0, 10);
+    }
+
+    // ── Refresh display ──────────────────────────────────────────────────────
+    async function refreshAll() {
+      const [snap, profile] = await Promise.all([
+        api('/api/dashboard'), api('/api/profile'),
+      ]);
+
+      // Balance hero
+      const income    = snap.monthly_income;
+      const unplanned = snap.month_unplanned_income || 0;
+      const total     = (income || 0) + unplanned;
+      const avail     = income !== null ? total - snap.month_spent : null;
+      const usedPct   = total > 0 ? Math.min(snap.month_spent / total * 100, 100) : 0;
+
+      const heroVal = $('heroVal');
+      if (avail === null) {
+        heroVal.className = 'bh-val unknown'; heroVal.textContent = 'Set income first';
+      } else {
+        heroVal.className = `bh-val ${avail < 0 ? 'danger' : avail < total * .15 ? 'warn' : 'ok'}`;
+        heroVal.textContent = `${money(avail)} so'm`;
+      }
+      $('heroSub').textContent = income
+        ? `Income: ${money(income)} so'm · Net Worth: ${money(profile.net_worth || 0)} so'm`
+        : 'Set monthly income to see balance';
+
+      // Pre-fill forms with current values
+      if (income) $('incomeInput').value = income;
+      if (profile.net_worth) $('netWorthInput').value = profile.net_worth;
+
+      // Ring chart
+      const ringColor = usedPct >= 100 ? '#ff4d5e' : usedPct >= 85 ? '#f5a623' : '#39b992';
+      if (_ringChart) _ringChart.destroy();
+      _ringChart = new Chart($('ringCanvas'), {
+        type: 'doughnut',
+        data: { datasets: [{ data: [usedPct, 100 - usedPct], backgroundColor: [ringColor, 'rgba(255,255,255,0.06)'], borderWidth: 0 }] },
+        options: { cutout: '72%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { duration: 600 } },
+      });
+      $('ringPct').innerHTML = `<span style="color:${ringColor}">${Math.round(usedPct)}%</span><small>used</small>`;
+
+    }
+
+    function makeFormHandler(formId, btnId, apiFn, successMsg) {
+      $(formId).onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = $(btnId);
+        btnLoad(btn, true);
+        try {
+          await apiFn();
+          e.target.reset();
+          setDefaultDate();
+          toast(successMsg, 'success');
+          await refreshAll();
+        } catch (err) { toast(err.message, 'error'); }
+        finally { btnLoad(btn, false); }
+      };
+    }
+
+    makeFormHandler('expenseForm', 'expenseBtn', () =>
+      api('/api/expenses', { method: 'POST', body: JSON.stringify({
+        category: $('expenseCategory').value.trim(),
+        amount:   Number($('expenseAmount').value),
+        date:     $('expenseDate').value || undefined,
+      })}), 'Expense saved ✓');
+
+    makeFormHandler('incomeForm', 'incomeBtn', () =>
+      api('/api/profile/income', { method: 'POST', body: JSON.stringify({
+        monthly_income: Number($('incomeInput').value),
+      })}), 'Income updated ✓');
+
+    makeFormHandler('netWorthForm', 'netWorthBtn', () =>
+      api('/api/profile/net-worth', { method: 'POST', body: JSON.stringify({
+        net_worth: Number($('netWorthInput').value),
+      })}), 'Net worth updated ✓');
+
+    makeFormHandler('budgetForm', 'budgetBtn', () =>
+      api('/api/budgets', { method: 'POST', body: JSON.stringify({
+        category:      $('budgetCategory').value.trim(),
+        monthly_limit: Number($('budgetLimit').value),
+      })}), 'Budget saved ✓');
+
+    makeFormHandler('unplannedForm', 'unplannedBtn', () =>
+      api('/api/incomes/unplanned', { method: 'POST', body: JSON.stringify({
+        amount: Number($('unplannedAmount').value),
+        source: $('unplannedSource').value.trim() || 'unplanned',
+      })}), 'Bonus saved ✓');
+
+
+
+    // After expense is saved, re-render chips so the selection clears
+    $('expenseCategory').oninput = () => renderCatChips();
+
+    /* ── AI Budget Recommendations ──────────────────────────────────────────── */
+    $('recommendBtn').onclick = async () => {
+      const btn = $('recommendBtn');
+      btnLoad(btn, true);
+      $('recommendPlaceholder').hidden = true;
+      $('recommendResults').hidden = true;
+
+      try {
+        const d = await api('/api/budget-recommend', { method: 'POST' });
+
+        $('recommendHeadline').textContent = d.headline || 'AI recommendations ready';
+
+        $('recommendCards').innerHTML = (d.recommendations || []).map(r => {
+          const savingsPct = r.current > 0 ? Math.round((r.savings / r.current) * 100) : 0;
+          const isOver = r.current > r.suggested;
+          return `<div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;padding:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:12px">
+            <div>
+              <div style="font-size:13px;font-weight:800;margin-bottom:4px;text-transform:capitalize">${r.category}</div>
+              <div style="font-size:12px;color:var(--muted);margin-bottom:6px">${r.tip || ''}</div>
+              <div style="display:flex;gap:12px;font-size:12px">
+                <span style="color:var(--muted)">Current: <strong style="color:var(--text)">${money(r.current)}</strong></span>
+                <span style="color:var(--muted)">→ Target: <strong style="color:var(--brand)">${money(r.suggested)}</strong></span>
+              </div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:15px;font-weight:800;color:${isOver ? 'var(--success)' : 'var(--muted)'}">−${money(r.savings)}</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">${savingsPct}% saving</div>
+            </div>
+          </div>`;
+        }).join('');
+
+        if (d.total_potential_savings > 0) {
+          const savLine = `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(57,185,146,.1);border-radius:10px;margin-top:4px;font-size:13px;font-weight:800">
+            <span>Total potential savings</span>
+            <span style="color:var(--brand)">${money(d.total_potential_savings)} so'm/month</span>
+          </div>`;
+          $('recommendCards').insertAdjacentHTML('beforeend', savLine);
+        }
+
+        $('recommendTip').textContent = d.overall_tip ? `💡 ${d.overall_tip}` : '';
+        $('recommendTip').hidden = !d.overall_tip;
+        $('recommendResults').hidden = false;
+        toast('AI recommendations ready', 'success');
+      } catch (err) {
+        $('recommendPlaceholder').textContent = err.message;
+        $('recommendPlaceholder').hidden = false;
+        toast(err.message, 'error');
+      } finally {
+        btnLoad(btn, false);
+      }
+    };
+
+    renderCatTabs();
+    renderCatChips();
+    setDefaultDate();
+    ensureAuth().then(refreshAll).catch(e => toast(e.message, 'error'));
+  </script>
+</body>
+</html>
