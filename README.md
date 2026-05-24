@@ -1,6 +1,6 @@
-# AI Finance — Telegram Mini App
+# AI-Powered Personal Finance Assistant
 
-A production-grade AI-powered personal finance assistant built as a Telegram Mini App.
+A production-grade AI-powered personal finance web application with Telegram bot integration.
 
 ## Features
 
