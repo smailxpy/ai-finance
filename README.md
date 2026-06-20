@@ -118,3 +118,6 @@ Then open your bot in Telegram and send `/start`.
 ## License
 
 MIT
+
+
+![image alt](https://github.com/smailxpy/ai-finance/blob/main/DEMO.png?raw=true)
